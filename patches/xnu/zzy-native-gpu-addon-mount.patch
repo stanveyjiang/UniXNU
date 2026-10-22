@@ -332,6 +332,17 @@ index a5ff474..4704203 100644
  done:
  	if (data_root) vnode_put(data_root);
  	native_owner_data_status = error;
+diff --git a/bsd/miscfs/bindfs/bindfs.h b/bsd/miscfs/bindfs/bindfs.h
+--- a/bsd/miscfs/bindfs/bindfs.h
++++ b/bsd/miscfs/bindfs/bindfs.h
+@@ -81,6 +81,7 @@
+ 
+ #define BINDM_CACHE 0x0001
+ #define BINDM_CASEINSENSITIVE 0x0000000000000002
++#define BINDM_FORCE_ROOT 0x0000000000000004
+ 
+ typedef int (*vop_t)(void *);
+ 
 diff --git a/bsd/miscfs/bindfs/bind_vfsops.c b/bsd/miscfs/bindfs/bind_vfsops.c
 index 412f9ec..4466a64 100644
 --- a/bsd/miscfs/bindfs/bind_vfsops.c
