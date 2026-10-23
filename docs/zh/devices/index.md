@@ -15,6 +15,7 @@
 | [小米 13（fuxi）](/zh/devices/fuxi) | SM8550 | 设备仓库，进行中 | matejkoo217、hanzi123-bilp |
 | [小米平板 7 / POCO Pad X1（uke）](/zh/devices/uke) | SM7675 | 已到 XNU 入口，等待根设备 | Allenwdk |
 | [Redmi Note 10 Pro（sweet）](/zh/devices/sweet) | SM7150 | 平台和加载器 bring-up，无可启动镜像 | dipa-studio |
+| [Redmi Note 10 5G（camellia）](/zh/devices/camellia) | MT6833 | Linux preboot 和 XNU 入口已工作，bootstrap 页表进行中 | stanveyjiang |
 | [一加 Ace 5 Pro（hummer）](/zh/devices/hummer) | SM8750 | UEFI 层工作，XNU 在 CI 试水 | 2426120557 |
 | [小米 6（sagit）](/zh/devices/sagit) | MSM8998 | 设备仓库，状态未记录 | dmnakzkahziamnk-a11y |
 | [小米平板 8 Pro（piano）](/zh/devices/piano) | SM8750 | 内核在 CI 编译并预链接，未在平板上运行 | code002-2 |

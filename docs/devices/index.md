@@ -15,6 +15,7 @@ The ports listed here are independent. Their maintainers own the repositories; t
 | [Xiaomi 13 (fuxi)](/devices/fuxi) | SM8550 | Device repositories, work in progress | matejkoo217, hanzi123-bilp |
 | [Xiaomi Pad 7 / POCO Pad X1 (uke)](/devices/uke) | SM7675 | XNU entry reached; root device pending | Allenwdk |
 | [Redmi Note 10 Pro (sweet)](/devices/sweet) | SM7150 | Platform and loader bring-up; no bootable image | dipa-studio |
+| [Redmi Note 10 5G (camellia)](/devices/camellia) | MT6833 | Linux preboot and XNU entry work; bootstrap page tables in progress | stanveyjiang |
 | [OnePlus Ace 5 Pro (hummer)](/devices/hummer) | SM8750 | UEFI layer works; XNU CI trial | 2426120557 |
 | [Xiaomi Mi 6 (sagit)](/devices/sagit) | MSM8998 | Device repository; status not documented | dmnakzkahziamnk-a11y |
 | [Xiaomi Pad 8 Pro (piano)](/devices/piano) | SM8750 | Kernel builds and prelinks in CI; not run on the tablet | code002-2 |
