@@ -28,7 +28,15 @@ diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
 index 985370e..641e809 100644
 --- a/osfmk/arm64/arm_vm_init.c
 +++ b/osfmk/arm64/arm_vm_init.c
-@@ -349,6 +349,98 @@ SECURITY_READ_ONLY_LATE(vm_map_address_t) physmap_end = (vm_map_address_t)0;
+@@ -76,6 +76,7 @@ extern void *last_kernel_symbol;
+ 
+ extern void arm64_replace_bootstack(cpu_data_t*);
+ extern void PE_slide_devicetree(vm_offset_t);
++extern vm_offset_t virtual_space_start;
+ 
+ /*
+  * KASLR parameters
+@@ -349,6 +350,100 @@ SECURITY_READ_ONLY_LATE(vm_map_address_t) physmap_end = (vm_map_address_t)0;
   */
  SECURITY_READ_ONLY_LATE(addr64_t) first_avail_phys = 0;
  
@@ -47,14 +55,16 @@ index 985370e..641e809 100644
 +SECURITY_READ_ONLY_LATE(vm_offset_t) camellia_fb_phys = 0;
 +SECURITY_READ_ONLY_LATE(vm_size_t) camellia_fb_size = 0;
 +
++extern vm_offset_t camellia_io_lookup(vm_offset_t pa, vm_size_t size);
++
 +static void
-+camellia_map_io_pages(tt_entry_t *cpu_tte, vm_offset_t va,
++camellia_map_io_pages(tt_entry_t *cpu_ttep, vm_offset_t va,
 +    vm_offset_t pa, vm_size_t size)
 +{
 +	vm_offset_t end = va + size;
 +
 +	for (; va < end; va += ARM_PGBYTES, pa += ARM_PGBYTES) {
-+		tt_entry_t *l1 = &cpu_tte[L1_TABLE_INDEX(va)];
++		tt_entry_t *l1 = &cpu_ttep[L1_TABLE_INDEX(va)];
 +		tt_entry_t *l2;
 +		tt_entry_t *l2e;
 +		pt_entry_t *l3;
@@ -85,23 +95,23 @@ index 985370e..641e809 100644
 +}
 +
 +static void
-+camellia_map_io_window(tt_entry_t *cpu_tte, boot_args *args)
++camellia_map_io_window(tt_entry_t *cpu_ttep, boot_args *boot_args_ptr)
 +{
 +	vm_size_t fb_size;
 +	vm_offset_t fb_phys;
 +
-+	camellia_map_io_pages(cpu_tte, camellia_io_window_base,
++	camellia_map_io_pages(cpu_ttep, camellia_io_window_base,
 +	    CAMELLIA_IO_PHYS_BASE, CAMELLIA_IO_WINDOW_SIZE);
 +
-+	fb_phys = args->Video.v_baseAddr & ~3ULL;
-+	fb_size = round_page((vm_size_t)args->Video.v_height *
-+	    (vm_size_t)args->Video.v_rowBytes);
++	fb_phys = boot_args_ptr->Video.v_baseAddr & ~3ULL;
++	fb_size = round_page((vm_size_t)boot_args_ptr->Video.v_height *
++	    (vm_size_t)boot_args_ptr->Video.v_rowBytes);
 +	if (fb_phys != 0 && fb_size != 0 && fb_size <= CAMELLIA_FB_WINDOW_SIZE) {
 +		camellia_fb_window_base = camellia_io_window_base +
 +		    CAMELLIA_IO_WINDOW_SIZE;
 +		camellia_fb_phys = fb_phys;
 +		camellia_fb_size = fb_size;
-+		camellia_map_io_pages(cpu_tte, camellia_fb_window_base,
++		camellia_map_io_pages(cpu_ttep, camellia_fb_window_base,
 +		    camellia_fb_phys, camellia_fb_size);
 +	}
 +}
