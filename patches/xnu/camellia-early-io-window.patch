@@ -36,7 +36,7 @@ index 985370e..641e809 100644
  
  /*
   * KASLR parameters
-@@ -349,6 +350,100 @@ SECURITY_READ_ONLY_LATE(vm_map_address_t) physmap_end = (vm_map_address_t)0;
+@@ -349,6 +350,162 @@ SECURITY_READ_ONLY_LATE(vm_map_address_t) physmap_end = (vm_map_address_t)0;
   */
  SECURITY_READ_ONLY_LATE(addr64_t) first_avail_phys = 0;
  
@@ -49,6 +49,9 @@ index 985370e..641e809 100644
 +#define CAMELLIA_IO_WINDOW_SIZE  0x01000000ULL
 +#define CAMELLIA_FB_WINDOW_SIZE  0x01000000ULL
 +#define CAMELLIA_IO_TOTAL_SIZE   (CAMELLIA_IO_WINDOW_SIZE + CAMELLIA_FB_WINDOW_SIZE)
++#define CAMELLIA_FB_MAP_PHYS     0xA4000100ULL
++#define CAMELLIA_FB_MAP_MAGIC    0x314D504649465545ULL
++#define CAMELLIA_FB_MAP_MAX_RUNS 100
 +
 +SECURITY_READ_ONLY_LATE(vm_offset_t) camellia_io_window_base = 0;
 +SECURITY_READ_ONLY_LATE(vm_offset_t) camellia_fb_window_base = 0;
@@ -57,6 +60,50 @@ index 985370e..641e809 100644
 +
 +extern vm_offset_t camellia_io_lookup(vm_offset_t pa, vm_size_t size);
 +
++typedef struct {
++	uint64_t physical;
++	uint32_t pages;
++	uint32_t reserved;
++} camellia_fb_page_map_run_t;
++
++typedef struct {
++	uint64_t magic;
++	uint64_t logical_size;
++	uint32_t page_size;
++	uint32_t run_count;
++	camellia_fb_page_map_run_t runs[CAMELLIA_FB_MAP_MAX_RUNS];
++} camellia_fb_page_map_t;
++
++static void
++camellia_map_io_page(tt_entry_t *cpu_ttep, vm_offset_t va, vm_offset_t pa)
++{
++	tt_entry_t *l1 = &cpu_ttep[L1_TABLE_INDEX(va)];
++	tt_entry_t *l2;
++	tt_entry_t *l2e;
++	pt_entry_t *l3;
++	pt_entry_t pte;
++
++	if ((*l1 & (ARM_TTE_TYPE_MASK | ARM_TTE_VALID)) !=
++	    (ARM_TTE_TYPE_TABLE | ARM_TTE_VALID)) {
++		panic("camellia IO L1 table missing for %p", (void *)va);
++	}
++	l2 = (tt_entry_t *)phystokv(*l1 & ARM_TTE_TABLE_MASK);
++	l2e = &l2[L2_TABLE_INDEX(va)];
++	if ((*l2e & (ARM_TTE_TYPE_MASK | ARM_TTE_VALID)) !=
++	    (ARM_TTE_TYPE_TABLE | ARM_TTE_VALID)) {
++		panic("camellia IO L2 table missing for %p", (void *)va);
++	}
++	l3 = (pt_entry_t *)phystokv(*l2e & ARM_TTE_TABLE_MASK);
++	pte = pa_to_pte(pa)
++	    | ARM_PTE_TYPE_VALID | ARM_PTE_AF | ARM_PTE_NX | ARM_PTE_PNX
++	    | ARM_PTE_AP(AP_RWNA)
++	    | ARM_PTE_ATTRINDX(CACHE_ATTRINDX_DISABLE);
++#if __ARM_KERNEL_PROTECT__
++	pte |= ARM_PTE_NG;
++#endif
++	l3[L3_TABLE_INDEX(va)] = pte;
++}
++
 +static void
 +camellia_map_io_pages(tt_entry_t *cpu_ttep, vm_offset_t va,
 +    vm_offset_t pa, vm_size_t size)
@@ -64,34 +111,46 @@ index 985370e..641e809 100644
 +	vm_offset_t end = va + size;
 +
 +	for (; va < end; va += ARM_PGBYTES, pa += ARM_PGBYTES) {
-+		tt_entry_t *l1 = &cpu_ttep[L1_TABLE_INDEX(va)];
-+		tt_entry_t *l2;
-+		tt_entry_t *l2e;
-+		pt_entry_t *l3;
-+		pt_entry_t pte;
-+
-+		if ((*l1 & (ARM_TTE_TYPE_MASK | ARM_TTE_VALID)) !=
-+		    (ARM_TTE_TYPE_TABLE | ARM_TTE_VALID)) {
-+			panic("camellia IO L1 table missing for %p", (void *)va);
-+		}
-+		l2 = (tt_entry_t *)phystokv(*l1 & ARM_TTE_TABLE_MASK);
-+		l2e = &l2[L2_TABLE_INDEX(va)];
-+		if ((*l2e & (ARM_TTE_TYPE_MASK | ARM_TTE_VALID)) !=
-+		    (ARM_TTE_TYPE_TABLE | ARM_TTE_VALID)) {
-+			panic("camellia IO L2 table missing for %p", (void *)va);
-+		}
-+		l3 = (pt_entry_t *)phystokv(*l2e & ARM_TTE_TABLE_MASK);
-+		pte = pa_to_pte(pa)
-+		    | ARM_PTE_TYPE_VALID | ARM_PTE_AF | ARM_PTE_NX | ARM_PTE_PNX
-+		    | ARM_PTE_AP(AP_RWNA)
-+		    | ARM_PTE_ATTRINDX(CACHE_ATTRINDX_DISABLE);
-+#if __ARM_KERNEL_PROTECT__
-+		pte |= ARM_PTE_NG;
-+#endif
-+		l3[L3_TABLE_INDEX(va)] = pte;
++		camellia_map_io_page(cpu_ttep, va, pa);
 +	}
 +	__builtin_arm_dmb(DMB_ISH);
 +	__builtin_arm_isb(ISB_SY);
++}
++
++static boolean_t
++camellia_map_fb_run_pages(tt_entry_t *cpu_ttep, vm_offset_t va,
++    vm_size_t size)
++{
++	volatile camellia_fb_page_map_t *map =
++	    (volatile camellia_fb_page_map_t *)(uintptr_t)CAMELLIA_FB_MAP_PHYS;
++	uint64_t limit;
++	vm_size_t done = 0;
++
++	if (map->magic != CAMELLIA_FB_MAP_MAGIC ||
++	    map->page_size != ARM_PGBYTES ||
++	    map->run_count == 0 ||
++	    map->run_count > CAMELLIA_FB_MAP_MAX_RUNS) {
++		return FALSE;
++	}
++	limit = MIN((uint64_t)size, map->logical_size);
++	for (uint32_t run = 0; run < map->run_count && done < limit; run++) {
++		uint64_t run_bytes =
++		    (uint64_t)map->runs[run].pages * map->page_size;
++		vm_offset_t run_phys = (vm_offset_t)map->runs[run].physical;
++
++		if (run_bytes > limit - done) {
++			run_bytes = limit - done;
++		}
++		for (uint64_t offset = 0; offset < run_bytes;
++		    offset += ARM_PGBYTES) {
++			camellia_map_io_page(cpu_ttep, va + done + offset,
++			    run_phys + offset);
++		}
++		done += run_bytes;
++	}
++	__builtin_arm_dmb(DMB_ISH);
++	__builtin_arm_isb(ISB_SY);
++	return done != 0;
 +}
 +
 +static void
@@ -111,8 +170,11 @@ index 985370e..641e809 100644
 +		    CAMELLIA_IO_WINDOW_SIZE;
 +		camellia_fb_phys = fb_phys;
 +		camellia_fb_size = fb_size;
-+		camellia_map_io_pages(cpu_ttep, camellia_fb_window_base,
-+		    camellia_fb_phys, camellia_fb_size);
++		if (!camellia_map_fb_run_pages(cpu_ttep,
++		    camellia_fb_window_base, camellia_fb_size)) {
++			camellia_map_io_pages(cpu_ttep, camellia_fb_window_base,
++			    camellia_fb_phys, camellia_fb_size);
++		}
 +	}
 +}
 +
