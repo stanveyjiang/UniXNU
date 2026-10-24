@@ -45,9 +45,9 @@ index 985370e..641e809 100644
 + * PTEs before TTBR0 is retired, because early io_map() cannot allocate new
 + * page-table pages through kernel_map.
 + */
-+#define CAMELLIA_IO_PHYS_BASE    0x08000000ULL
-+#define CAMELLIA_IO_WINDOW_SIZE  0x10000000ULL
-+#define CAMELLIA_FB_WINDOW_SIZE  0x02000000ULL
++#define CAMELLIA_IO_PHYS_BASE    0x0C000000ULL
++#define CAMELLIA_IO_WINDOW_SIZE  0x01000000ULL
++#define CAMELLIA_FB_WINDOW_SIZE  0x01000000ULL
 +#define CAMELLIA_IO_TOTAL_SIZE   (CAMELLIA_IO_WINDOW_SIZE + CAMELLIA_FB_WINDOW_SIZE)
 +
 +SECURITY_READ_ONLY_LATE(vm_offset_t) camellia_io_window_base = 0;
