@@ -36,7 +36,7 @@ index 985370e..641e809 100644
  
  /*
   * KASLR parameters
-@@ -349,6 +350,101 @@ SECURITY_READ_ONLY_LATE(vm_map_address_t) physmap_end = (vm_map_address_t)0;
+@@ -349,6 +350,100 @@ SECURITY_READ_ONLY_LATE(vm_map_address_t) physmap_end = (vm_map_address_t)0;
   */
  SECURITY_READ_ONLY_LATE(addr64_t) first_avail_phys = 0;
  
@@ -105,8 +105,7 @@ index 985370e..641e809 100644
 +
 +	fb_phys = trunc_page(boot_args_ptr->Video.v_baseAddr & ~3ULL);
 +	fb_size = round_page((vm_size_t)boot_args_ptr->Video.v_height *
-+	    (vm_size_t)boot_args_ptr->Video.v_rowBytes +
-+	    ((boot_args_ptr->Video.v_baseAddr & ~3ULL) & PAGE_MASK));
++	    (vm_size_t)boot_args_ptr->Video.v_rowBytes) + ARM_PGBYTES;
 +	if (fb_phys != 0 && fb_size != 0 && fb_size <= CAMELLIA_FB_WINDOW_SIZE) {
 +		camellia_fb_window_base = camellia_io_window_base +
 +		    CAMELLIA_IO_WINDOW_SIZE;
