@@ -103,7 +103,7 @@ index 985370e..641e809 100644
 +	camellia_map_io_pages(cpu_ttep, camellia_io_window_base,
 +	    CAMELLIA_IO_PHYS_BASE, CAMELLIA_IO_WINDOW_SIZE);
 +
-+	fb_phys = boot_args_ptr->Video.v_baseAddr & ~3ULL;
++	fb_phys = trunc_page(boot_args_ptr->Video.v_baseAddr & ~3ULL);
 +	fb_size = round_page((vm_size_t)boot_args_ptr->Video.v_height *
 +	    (vm_size_t)boot_args_ptr->Video.v_rowBytes);
 +	if (fb_phys != 0 && fb_size != 0 && fb_size <= CAMELLIA_FB_WINDOW_SIZE) {
