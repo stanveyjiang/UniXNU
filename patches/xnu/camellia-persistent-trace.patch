@@ -46,7 +46,7 @@ index 94243c9..047e6c7 100644
  }
  
 diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
-index c524671..bf1fc47 100644
+index c524671..f4a828d 100644
 --- a/bsd/kern/kern_exec.c
 +++ b/bsd/kern/kern_exec.c
 @@ -173,6 +173,7 @@
@@ -57,10 +57,12 @@ index c524671..bf1fc47 100644
  
  #include <pexpert/pexpert.h>
  
-@@ -7052,12 +7053,173 @@ create_unix_stack(vm_map_t map, load_result_t* load_result,
+@@ -7052,12 +7053,179 @@ create_unix_stack(vm_map_t map, load_result_t* load_result,
  
  #include <sys/reboot.h>
  
++typedef uint64_t camellia_pmap_paddr_t __kernel_ptr_semantics;
++extern vm_map_address_t phystokv(camellia_pmap_paddr_t pa);
 +extern vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
 +
 +#define CAMELLIA_TRACE_PHYS      0xA4000900ULL
@@ -138,11 +140,15 @@ index c524671..bf1fc47 100644
 +		camellia_trace_enabled = 0;
 +		return;
 +	}
-+	address = ml_io_map((vm_offset_t)CAMELLIA_TRACE_PHYS,
-+	    CAMELLIA_TRACE_BYTES);
-+	if (address == 0) {
-+		/* The mapping service is not ready yet; retry at a later stage. */
-+		return;
++	address = phystokv((camellia_pmap_paddr_t)CAMELLIA_TRACE_PHYS);
++	if (address < VM_MIN_KERNEL_ADDRESS ||
++	    address > VM_MAX_KERNEL_ADDRESS - CAMELLIA_TRACE_BYTES) {
++		address = ml_io_map((vm_offset_t)CAMELLIA_TRACE_PHYS,
++		    CAMELLIA_TRACE_BYTES);
++		if (address == 0) {
++			/* The mapping service is not ready yet; retry later. */
++			return;
++		}
 +	}
 +	camellia_trace = (camellia_trace_header_t *)address;
 +	counter = camellia_trace_counter();
@@ -231,7 +237,7 @@ index c524671..bf1fc47 100644
  	if (panic_stage == -2) {
  		int requested = -1;
  
-@@ -8099,6 +8261,7 @@ load_init_program(proc_t p)
+@@ -8099,6 +8267,7 @@ load_init_program(proc_t p)
  {
  	int loadinit_fault = 0;
  
