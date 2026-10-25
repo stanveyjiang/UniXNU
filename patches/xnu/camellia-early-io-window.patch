@@ -36,7 +36,7 @@ index 985370e..641e809 100644
  
  /*
   * KASLR parameters
-@@ -349,6 +350,162 @@ SECURITY_READ_ONLY_LATE(vm_map_address_t) physmap_end = (vm_map_address_t)0;
+@@ -349,6 +350,163 @@ SECURITY_READ_ONLY_LATE(vm_map_address_t) physmap_end = (vm_map_address_t)0;
   */
  SECURITY_READ_ONLY_LATE(addr64_t) first_avail_phys = 0;
  
@@ -49,7 +49,7 @@ index 985370e..641e809 100644
 +#define CAMELLIA_IO_WINDOW_SIZE  0x01000000ULL
 +#define CAMELLIA_FB_WINDOW_SIZE  0x01000000ULL
 +#define CAMELLIA_IO_TOTAL_SIZE   (CAMELLIA_IO_WINDOW_SIZE + CAMELLIA_FB_WINDOW_SIZE)
-+#define CAMELLIA_FB_MAP_PHYS     0xA4000100ULL
++#define CAMELLIA_FB_MAP_OFFSET   0x500ULL
 +#define CAMELLIA_FB_MAP_MAGIC    0x314D504649465545ULL
 +#define CAMELLIA_FB_MAP_MAX_RUNS 100
 +
@@ -119,10 +119,11 @@ index 985370e..641e809 100644
 +
 +static boolean_t
 +camellia_map_fb_run_pages(tt_entry_t *cpu_ttep, vm_offset_t va,
-+    vm_size_t size)
++    vm_size_t size, boot_args *boot_args_ptr)
 +{
 +	volatile camellia_fb_page_map_t *map =
-+	    (volatile camellia_fb_page_map_t *)(uintptr_t)CAMELLIA_FB_MAP_PHYS;
++	    (volatile camellia_fb_page_map_t *)((uintptr_t)boot_args_ptr +
++	    CAMELLIA_FB_MAP_OFFSET);
 +	uint64_t limit;
 +	vm_size_t done = 0;
 +
@@ -171,7 +172,7 @@ index 985370e..641e809 100644
 +		camellia_fb_phys = fb_phys;
 +		camellia_fb_size = fb_size;
 +		if (!camellia_map_fb_run_pages(cpu_ttep,
-+		    camellia_fb_window_base, camellia_fb_size)) {
++		    camellia_fb_window_base, camellia_fb_size, boot_args_ptr)) {
 +			camellia_map_io_pages(cpu_ttep, camellia_fb_window_base,
 +			    camellia_fb_phys, camellia_fb_size);
 +		}
