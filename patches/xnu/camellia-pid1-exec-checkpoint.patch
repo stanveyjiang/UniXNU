@@ -1,44 +1,428 @@
-diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
 --- a/bsd/kern/kern_exec.c
 +++ b/bsd/kern/kern_exec.c
-@@ -7006,6 +7006,28 @@
+@@ -402,6 +402,7 @@
+ static void exec_resettextvp(proc_t, struct image_params *);
+ static int process_signature(proc_t, struct image_params *);
+ static void exec_prefault_data(proc_t, struct image_params *, load_result_t *);
++static void camellia_exec_checkpoint(unsigned int);
+ static errno_t exec_handle_port_actions(struct image_params *imgp,
+     struct exec_port_actions *port_actions);
+ static errno_t exec_handle_exception_port_actions(const struct image_params *imgp,
+@@ -1209,6 +1210,8 @@
+ 	boolean_t               reslide = FALSE;
+ 	char *                  userspace_coredump_name = NULL;
+ 
++	camellia_exec_checkpoint(15);
++
+ 	/*
+ 	 * make sure it's a Mach-O 1.0 or Mach-O 2.0 binary; the difference
+ 	 * is a reserved field on the end, so for the most part, we can
+@@ -1312,6 +1315,7 @@
+ #endif
+ 
+ 	/* Copy in arguments/environment from the old process */
++	camellia_exec_checkpoint(16);
+ 	error = exec_extract_strings(imgp);
+ 	if (error) {
+ 		goto bad;
+@@ -1344,9 +1348,11 @@
+ 	/*
+ 	 * Actually load the image file we previously decided to load.
+ 	 */
++	camellia_exec_checkpoint(17);
+ 	boot_progress_process_stage(proc_getpid(p),p->p_name,"exec load_machfile enter");
+ 	lret = load_machfile(imgp, mach_header, thread, &map, &load_result);
+ 	boot_progress_process_stage(proc_getpid(p),p->p_name,"exec load_machfile returned");
++	camellia_exec_checkpoint(18);
+ 	if (lret != LOAD_SUCCESS) {
+ 		error = load_return_to_errno(lret);
+ 
+@@ -1682,6 +1688,8 @@
+ 		goto badtoolate;
+ 	}
+ 
++	camellia_exec_checkpoint(19);
++
+ 	/*
+ 	 * deal with voucher on exec-calling thread.
+ 	 */
+@@ -1971,6 +1979,7 @@
+ 
+ 	/* Avoid immediate VM faults back into kernel */
+ 	exec_prefault_data(p, imgp, &load_result);
++	camellia_exec_checkpoint(20);
+ 
+ 	vm_map_switch(old_map);
+ 
+@@ -2156,6 +2165,7 @@
+ bad:
+ 	/* If we hit this, we likely would have leaked an exit reason */
+ 	assert(exec_failure_reason == OS_REASON_NULL);
++	camellia_exec_checkpoint(21);
+ 	return error;
+ }
+ 
+@@ -2220,6 +2230,8 @@
+ 	int itercount = 0;
+ 	proc_t p = vfs_context_proc(imgp->ip_vfs_context);
+ 
++	camellia_exec_checkpoint(5);
++
+ 	/*
+ 	 * For exec, the translock needs to be taken on old proc and not
+ 	 * on new shadow proc.
+@@ -2232,11 +2244,13 @@
+ 	if (error) {
+ 		goto bad_notrans;
+ 	}
++	camellia_exec_checkpoint(6);
+ 
+ 	error = exec_save_path(imgp, imgp->ip_user_fname, imgp->ip_seg, &excpath);
+ 	if (error) {
+ 		goto bad_notrans;
+ 	}
++	camellia_exec_checkpoint(7);
+ 
+ 	/* Use excpath, which contains the copyin-ed exec path */
+ 	DTRACE_PROC1(exec, uintptr_t, excpath);
+@@ -2256,6 +2270,7 @@
+ 	}
+ 	imgp->ip_ndp = ndp;     /* successful namei(); call nameidone() later */
+ 	imgp->ip_vp = ndp->ni_vp;       /* if set, need to vnode_put() at some point */
++	camellia_exec_checkpoint(8);
+ 
+ 	/*
+ 	 * Before we start the transition from binary A to binary B, make
+@@ -2275,18 +2290,22 @@
+ 	if (error) {
+ 		goto bad_notrans;
+ 	}
++	camellia_exec_checkpoint(9);
+ 
+ 	error = exec_check_permissions(imgp);
+ 	if (error) {
+ 		goto bad;
+ 	}
++	camellia_exec_checkpoint(10);
+ 
+ 	/* Copy; avoid invocation of an interpreter overwriting the original */
+ 	if (once) {
+ 		once = 0;
+ 		*imgp->ip_origvattr = *imgp->ip_vattr;
+ 	}
++	camellia_exec_checkpoint(11);
+ 
++	camellia_exec_checkpoint(12);
+ 	error = vn_rdwr(UIO_READ, imgp->ip_vp, imgp->ip_vdata, PAGE_SIZE, 0,
+ 	    UIO_SYSSPACE, IO_NODELOCKED,
+ 	    vfs_context_ucred(imgp->ip_vfs_context),
+@@ -2298,6 +2317,7 @@
+ 	if (resid) {
+ 		memset(imgp->ip_vdata + (PAGE_SIZE - resid), 0x0, resid);
+ 	}
++	camellia_exec_checkpoint(13);
+ 
+ encapsulated_binary:
+ 	/* Limit the number of iterations we will attempt on each binary */
+@@ -2307,6 +2327,7 @@
+ 	}
+ 	error = -1;
+ 	for (i = 0; error == -1 && execsw[i].ex_imgact != NULL; i++) {
++		camellia_exec_checkpoint(14);
+ 		error = (*execsw[i].ex_imgact)(imgp);
+ 
+ 		switch (error) {
+@@ -2363,6 +2384,8 @@
+ 		}
+ 	}
+ 
++	camellia_exec_checkpoint(22);
++
+ 	if (error == -1) {
+ 		error = ENOEXEC;
+ 	} else if (error == 0) {
+@@ -2391,6 +2414,7 @@
+ 		nameidone(imgp->ip_ndp);
+ 	}
+ 	kfree_type(struct nameidata, ndp);
++	camellia_exec_checkpoint(23);
+ 
+ 	return error;
+ }
+@@ -5127,6 +5151,8 @@
+ 	struct __mac_execve_args muap;
+ 	int err;
+ 
++	camellia_exec_checkpoint(2);
++
+ 	memoryshot(VM_EXECVE, DBG_FUNC_NONE);
+ 
+ 	muap.fname = uap->fname;
+@@ -5134,6 +5160,7 @@
+ 	muap.envp = uap->envp;
+ 	muap.mac_p = USER_ADDR_NULL;
+ 	err = __mac_execve(p, &muap, retval);
++	camellia_exec_checkpoint(err == 0 ? 29 : 30);
+ 
+ 	return err;
+ }
+@@ -5178,6 +5205,7 @@
+ 	task_t new_task = NULL;
+ 	boolean_t should_release_proc_ref = FALSE;
+ 	boolean_t exec_done = FALSE;
++	boolean_t exec_transition_acquired = FALSE;
+ 	void *inherit = NULL;
+ 	struct {
+ 		struct image_params imgp;
+@@ -5211,6 +5239,7 @@
+ 	imgp->ip_simulator_binary = IMGPF_SB_DEFAULT;
+ 	imgp->ip_subsystem_root_path = NULL;
+ 	uthread_set_exec_data(current_uthread(), imgp);
++	camellia_exec_checkpoint(3);
+ 
+ #if CONFIG_MACF
+ 	if (uap->mac_p != USER_ADDR_NULL) {
+@@ -5242,6 +5271,7 @@
+ 		}
+ 
+ 		new_task = get_threadtask(imgp->ip_new_thread);
++		camellia_exec_checkpoint(4);
+ 	}
+ 
+ 	p = (proc_t)get_bsdthreadtask_info(imgp->ip_new_thread);
+@@ -5260,7 +5290,9 @@
+ 	 * Warning: If activation failed after point of no return, it returns error
+ 	 * as 0 and pretends the call succeeded.
+ 	 */
++	camellia_exec_checkpoint(24);
+ 	error = exec_activate_image(imgp);
++	camellia_exec_checkpoint(25);
+ 	/* thread and task ref returned for vfexec case */
+ 
+ 	if (imgp->ip_new_thread != NULL) {
+@@ -5277,6 +5309,7 @@
+ 
+ 	if (!error) {
+ 		p = proc_exec_switch_task(current_proc(), p, old_task, new_task, imgp, &inherit);
++		camellia_exec_checkpoint(26);
+ 		/* proc ref returned */
+ 		should_release_proc_ref = TRUE;
+ 	}
+@@ -5296,6 +5329,7 @@
+ 		 */
+ 		ipc_task_enable(new_task);
+ 		error = process_signature(p, imgp);
++		camellia_exec_checkpoint(27);
+ 	}
+ 
+ #if defined(HAS_APPLE_PAC)
+@@ -5345,12 +5379,35 @@
+ 		 * exec_activate_image because task_bank_init checks entitlements that
+ 		 * aren't loaded until subsequent calls (including exec_resettextvp).
+ 		 */
++		if ((p->p_lflag & P_LINTRANSIT) == P_LINTRANSIT) {
++			camellia_exec_checkpoint(45);
++			if (p->p_transholder == current_thread()) {
++				camellia_exec_checkpoint(47);
++				proc_transend(p, 0);
++			}
++		} else {
++			camellia_exec_checkpoint(46);
++		}
+ 		error = proc_transstart(p, 0, 0);
++		camellia_exec_checkpoint(error ? 49 : 48);
++		if (error == EDEADLK && p == initproc) {
++			/*
++			 * PID 1 is still bootstrap-serialized at this point.  Do
++			 * not clear a transition owned by another thread, but let
++			 * the one-shot init exec reach task_bank_init.
++			 */
++			camellia_exec_checkpoint(50);
++			error = 0;
++		} else if (!error) {
++			exec_transition_acquired = TRUE;
++		}
+ 	}
+ 
+ 	if (!error) {
+ 		task_bank_init(new_task);
+-		proc_transend(p, 0);
++		if (exec_transition_acquired) {
++			proc_transend(p, 0);
++		}
+ 
+ 		// Don't inherit crash behavior across exec
+ 		p->p_crash_behavior = 0;
+@@ -5480,6 +5537,7 @@
+ 		ipc_importance_release(inherit);
+ 	}
+ 
++	camellia_exec_checkpoint(28);
+ 	return error;
+ }
+ 
+@@ -6994,6 +7052,28 @@
  
  #include <sys/reboot.h>
  
-+extern vm_offset_t camellia_fb_window_base;
-+extern vm_size_t camellia_fb_size;
-+
 +static void
-+camellia_pid1_exec_checkpoint(int error)
++camellia_exec_checkpoint(unsigned int stage)
 +{
-+	volatile uint32_t *fb;
-+	vm_size_t bytes;
++	char text[48];
++	static int panic_stage = -2;
 +
-+	if (camellia_fb_window_base == 0 || camellia_fb_size < 4) {
-+		return;
++	if (panic_stage == -2) {
++		int requested = -1;
++
++		if (!PE_parse_boot_argn("camellia-stage-panic", &requested,
++		    sizeof(requested))) {
++			requested = -1;
++		}
++		panic_stage = requested;
 +	}
-+	fb = (volatile uint32_t *)(uintptr_t)camellia_fb_window_base;
-+	bytes = MIN((vm_size_t)0x10000, camellia_fb_size);
-+	for (vm_size_t offset = 0; offset + sizeof(uint32_t) <= bytes;
-+	    offset += sizeof(uint32_t)) {
-+		fb[offset / sizeof(uint32_t)] =
-+		    error == 0 ? 0xFFFFFF00 : 0xFF00FFFF;
++	if (panic_stage >= 0 && stage == (unsigned int)panic_stage) {
++		panic("CAMUNIXNU exec stage %u reached", stage);
 +	}
-+	__builtin_arm_dmb(DMB_ISH);
++	snprintf(text, sizeof(text), "CAMUNIXNU exec stage %u", stage);
++	boot_progress_stage_sync(text);
 +}
 +
  /*
   * load_init_program_at_path
   *
-@@ -7090,7 +7108,10 @@ load_init_program_at_path(proc_t p, user_addr_t scratch_addr, const char* path)
+@@ -7896,6 +7976,7 @@
+ 	/*
+ 	 * Validate inputs and pre-conditions
+ 	 */
++	camellia_exec_checkpoint(0);
+ 	assert(p);
+ 	assert(scratch_addr);
+ 	assert(path);
+@@ -7968,7 +8049,10 @@
  	 */
  	set_security_token(p, proc_ucred_unsafe(p));
  
 -	return execve(p, &init_exec_args, retval);
-+	int result = execve(p, &init_exec_args, retval);
-+
-+	camellia_pid1_exec_checkpoint(result);
-+	return result;
++	camellia_exec_checkpoint(1);
++	error = execve(p, &init_exec_args, retval);
++	camellia_exec_checkpoint(error == 0 ? 29 : 30);
++	return error;
  }
  
  static const char * init_programs[] = {
+@@ -8013,6 +8097,12 @@
+ void
+ load_init_program(proc_t p)
+ {
++	int loadinit_fault = 0;
++
++	if (PE_parse_boot_argn("camellia-loadinit-fault", &loadinit_fault,
++	    sizeof(loadinit_fault)) && loadinit_fault) {
++		__asm__ volatile("brk #0xca11" ::: "memory");
++	}
+ 	boot_progress_stage("load_init_program enter");
+ 	uint32_t i;
+ 	int error;
+@@ -8510,6 +8600,8 @@
+ 	const int vfexec = 0;
+ 	os_reason_t signature_failure_reason = OS_REASON_NULL;
+ 
++	camellia_exec_checkpoint(31);
++
+ 	/*
+ 	 * Override inherited code signing flags with the
+ 	 * ones for the process that is being successfully
+@@ -8529,6 +8621,7 @@
+ 	} else {
+ 		vm_map_cs_enforcement_set(get_task_map(proc_task(p)), FALSE);
+ 	}
++	camellia_exec_checkpoint(32);
+ 
+ 	/*
+ 	 * image activation may be failed due to policy
+@@ -8536,6 +8629,7 @@
+ 	 * approve of exec, kill and return immediately.
+ 	 */
+ 	if (imgp->ip_mac_return != 0) {
++		camellia_exec_checkpoint(33);
+ 		boot_progress_process_stage(proc_getpid(p),p->p_name,"exec MAC policy REFUSED");
+ 		KERNEL_DEBUG_CONSTANT(BSDDBG_CODE(DBG_BSD_PROC, BSD_PROC_EXITREASON_CREATE) | DBG_FUNC_NONE,
+ 		    proc_getpid(p), OS_REASON_EXEC, EXEC_EXIT_REASON_SECURITY_POLICY, 0, 0);
+@@ -8546,6 +8640,7 @@
+ 	}
+ 
+ 	if (imgp->ip_cs_error != OS_REASON_NULL) {
++		camellia_exec_checkpoint(34);
+ 		signature_failure_reason = imgp->ip_cs_error;
+ 		imgp->ip_cs_error = OS_REASON_NULL;
+ 		error = EACCES;
+@@ -8555,6 +8650,7 @@
+ 	/* call the launch constraints hook */
+ 	os_reason_t launch_constraint_reason;
+ 	if ((error = mac_proc_check_launch_constraints(p, imgp, &launch_constraint_reason)) != 0) {
++		camellia_exec_checkpoint(35);
+ 		signature_failure_reason = launch_constraint_reason;
+ 		goto done;
+ 	}
+@@ -8603,6 +8699,7 @@
+ 	/* If the code signature came through the image activation path, we skip the
+ 	 * taskgated / externally attached path. */
+ 	if (imgp->ip_csflags & CS_SIGNED) {
++		camellia_exec_checkpoint(36);
+ 		error = 0;
+ 		goto done;
+ 	}
+@@ -8613,6 +8710,7 @@
+ 
+ 	kr = task_get_task_access_port(proc_task(p), &port);
+ 	if (KERN_SUCCESS != kr || !IPC_PORT_VALID(port)) {
++		camellia_exec_checkpoint(37);
+ 		error = 0;
+ 		if (require_success) {
+ 			KERNEL_DEBUG_CONSTANT(BSDDBG_CODE(DBG_BSD_PROC, BSD_PROC_EXITREASON_CREATE) | DBG_FUNC_NONE,
+@@ -8637,6 +8735,7 @@
+ 		error = 0;
+ 		break;
+ 	case KERN_FAILURE:
++		camellia_exec_checkpoint(38);
+ 		error = EACCES;
+ 
+ 		KERNEL_DEBUG_CONSTANT(BSDDBG_CODE(DBG_BSD_PROC, BSD_PROC_EXITREASON_CREATE) | DBG_FUNC_NONE,
+@@ -8644,6 +8743,7 @@
+ 		signature_failure_reason = os_reason_create(OS_REASON_CODESIGNING, CODESIGNING_EXIT_REASON_TASKGATED_INVALID_SIG);
+ 		goto done;
+ 	default:
++		camellia_exec_checkpoint(39);
+ 		error = EACCES;
+ 
+ 		KERNEL_DEBUG_CONSTANT(BSDDBG_CODE(DBG_BSD_PROC, BSD_PROC_EXITREASON_CREATE) | DBG_FUNC_NONE,
+@@ -8699,8 +8799,10 @@
+ 		 * state.
+ 		 */
+ 
++		camellia_exec_checkpoint(40);
+ 		boot_progress_process_stage(proc_getpid(p),p->p_name,"exec process signature enter");
+ 		error = proc_process_signature(p, &signature_failure_reason);
++		camellia_exec_checkpoint(error ? 42 : 41);
+ 		boot_progress_process_stage(proc_getpid(p),p->p_name,error ? "exec process signature REFUSED" : "exec process signature accepted");
+ 	}
+ 
+@@ -8714,6 +8816,7 @@
+ 		kr = thread_process_signature(imgp->ip_new_thread, proc_get_task_raw(p));
+ 
+ 		if (kr != KERN_SUCCESS) {
++			camellia_exec_checkpoint(43);
+ 			error = EINVAL;
+ 			signature_failure_reason = os_reason_create(OS_REASON_EXEC, EXEC_EXIT_REASON_MACHINE_THREAD);
+ 		}
+@@ -8750,6 +8853,10 @@
+ 		}
+ 	}
+ 
++	if (0 == error) {
++		camellia_exec_checkpoint(44);
++	}
++
+ 	if (port != IPC_PORT_NULL) {
+ 		ipc_port_release_send(port);
+ 	}

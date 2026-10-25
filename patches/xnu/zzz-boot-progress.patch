@@ -271,7 +271,7 @@
  	PE_handle_ext_interrupt();
 --- /dev/null
 +++ b/osfmk/kern/boot_progress.h
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,36 @@
 +// SPDX-License-Identifier: MIT
 +#ifndef XNU_BOOT_PROGRESS_H
 +#define XNU_BOOT_PROGRESS_H
@@ -283,6 +283,7 @@
 +void boot_progress_bind(uintptr_t, unsigned, unsigned, unsigned, unsigned);
 +void boot_progress_putc(char);
 +void boot_progress_stage(const char *);
++void boot_progress_stage_sync(const char *);
 +void boot_progress_irq(uint64_t, uint64_t, uint64_t);
 +void boot_progress_poll(void);
 +void boot_progress_user_breakpoint(void *, unsigned);
@@ -297,6 +298,7 @@
 +#define boot_progress_bind(...) ((void)0)
 +static inline void boot_progress_putc(char c) { (void)c; }
 +#define boot_progress_stage(s) ((void)0)
++#define boot_progress_stage_sync(s) ((void)0)
 +#define boot_progress_irq(...) ((void)0)
 +#define boot_progress_poll() ((void)0)
 +#define boot_progress_user_breakpoint(...) ((void)0)

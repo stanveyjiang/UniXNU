@@ -44,11 +44,19 @@ for LATE_PATCH in "$ROOT/patches/xnu/camellia-pid1-exec-checkpoint.patch" \
   fi
 done
 for PATCH in "$ROOT"/patches/xnu/*.patch "$ROOT"/kits/NativePrelink/patches/*.patch; do
+  if [ "$PATCH" = "$ROOT/patches/xnu/camellia-pid1-exec-checkpoint.patch" ]; then
+    continue
+  fi
   if ! git -C .cache/xnu-work apply --reverse --check "$PATCH" >/dev/null 2>&1; then
     git -C .cache/xnu-work apply --check "$PATCH"
     git -C .cache/xnu-work apply "$PATCH"
   fi
 done
+# This map adds context to the boot-progress and syscall checkpoint hunks, so
+# apply it only after every other XNU/kit patch has reached its final form.
+EXEC_STAGE_PATCH="$ROOT/patches/xnu/camellia-pid1-exec-checkpoint.patch"
+git -C .cache/xnu-work apply --check "$EXEC_STAGE_PATCH"
+git -C .cache/xnu-work apply "$EXEC_STAGE_PATCH"
 export XNU_AVAILABILITY_PL=$ROOT/.cache/fakeroot/usr/local/libexec/availability.pl
 python3 scripts/prepare-xnu-source.py
 # The first pass of a new tree (XNU_BOOTSTRAP=1, set by the unixnu driver) only has to leave the compile records and
