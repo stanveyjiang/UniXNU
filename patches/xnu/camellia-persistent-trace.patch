@@ -57,12 +57,10 @@ index c524671..1e4dffb 100644
  
  #include <pexpert/pexpert.h>
  
-@@ -7052,12 +7053,179 @@ create_unix_stack(vm_map_t map, load_result_t* load_result,
+@@ -7052,12 +7053,178 @@ create_unix_stack(vm_map_t map, load_result_t* load_result,
  
  #include <sys/reboot.h>
  
-+typedef uint64_t camellia_pmap_paddr_t __kernel_ptr_semantics;
-+extern vm_map_address_t phystokv(camellia_pmap_paddr_t pa);
 +extern vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
 +
 +#define CAMELLIA_TRACE_PHYS      0x48080000ULL
@@ -140,15 +138,16 @@ index c524671..1e4dffb 100644
 +		camellia_trace_enabled = 0;
 +		return;
 +	}
-+	address = phystokv((camellia_pmap_paddr_t)CAMELLIA_TRACE_PHYS);
-+	if (address < VM_MIN_KERNEL_ADDRESS ||
-+	    address > VM_MAX_KERNEL_ADDRESS - CAMELLIA_TRACE_BYTES) {
-+		address = ml_io_map((vm_offset_t)CAMELLIA_TRACE_PHYS,
-+		    CAMELLIA_TRACE_BYTES);
-+		if (address == 0) {
-+			/* The mapping service is not ready yet; retry later. */
-+			return;
-+		}
++	/*
++	 * This page is below DarwinBoot's physical kernel window, so it is
++	 * intentionally outside phystokv()'s valid range. Map the reserved page
++	 * explicitly after arm_vm_init(), when virtual_space_start is valid.
++	 */
++	address = ml_io_map((vm_offset_t)CAMELLIA_TRACE_PHYS,
++	    CAMELLIA_TRACE_BYTES);
++	if (address == 0) {
++		/* The mapping service is not ready yet; retry later. */
++		return;
 +	}
 +	camellia_trace = (camellia_trace_header_t *)address;
 +	counter = camellia_trace_counter();
@@ -257,23 +256,7 @@ index 18f47bb..b71c9e3 100644
  extern void configure_late_apple_regs(bool cold_boot);
  #endif /* __arm64__ */
  
-@@ -357,6 +358,7 @@ arm_init(
- 	unsigned int dt_entry_size = 0;
- 
- 	arm_setup_pre_sign();
-+	camellia_persistent_trace_stage(8001);
- 
- 	arm_slide_rebase_and_sign_image();
- 
-@@ -380,6 +382,7 @@ arm_init(
- 
- 	PE_init_platform(FALSE, args); /* Get platform expert set up */
- 	boot_progress_init();
-+	camellia_persistent_trace_stage(8002);
- 
- #if __arm64__
- 	configure_timer_apple_regs();
-@@ -542,6 +545,7 @@ arm_init(
+@@ -542,6 +543,7 @@ arm_init(
  
  	boot_progress_stage("arm_vm_init enter");
  	arm_vm_init(xmaxmem, args);
@@ -281,7 +264,7 @@ index 18f47bb..b71c9e3 100644
  	boot_progress_stage("arm_vm_init returned");
  
  	if (debug_boot_arg) {
-@@ -557,6 +561,7 @@ arm_init(
+@@ -557,6 +559,7 @@ arm_init(
  	/* Setup debugging output. */
  	const unsigned int serial_exists = serial_init();
  	kernel_startup_initialize_upto(STARTUP_SUB_KPRINTF);
