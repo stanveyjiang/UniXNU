@@ -63,7 +63,7 @@ index 985370e..42f12a8 100644
  
  /*
   * KASLR parameters
-@@ -349,6 +350,173 @@ SECURITY_READ_ONLY_LATE(vm_map_address_t) physmap_end = (vm_map_address_t)0;
+@@ -349,6 +350,191 @@ SECURITY_READ_ONLY_LATE(vm_map_address_t) physmap_end = (vm_map_address_t)0;
   */
  SECURITY_READ_ONLY_LATE(addr64_t) first_avail_phys = 0;
  
@@ -75,13 +75,18 @@ index 985370e..42f12a8 100644
 +#define CAMELLIA_IO_PHYS_BASE    0x0C000000ULL
 +#define CAMELLIA_IO_WINDOW_SIZE  0x01000000ULL
 +#define CAMELLIA_FB_WINDOW_SIZE  0x01000000ULL
-+#define CAMELLIA_IO_TOTAL_SIZE   (CAMELLIA_IO_WINDOW_SIZE + CAMELLIA_FB_WINDOW_SIZE)
++#define CAMELLIA_TRACE_PHYS_BASE 0x48080000ULL
++#define CAMELLIA_TRACE_WINDOW_SIZE 0x00010000ULL
++#define CAMELLIA_IO_TOTAL_SIZE   (CAMELLIA_IO_WINDOW_SIZE + \
++                                  CAMELLIA_FB_WINDOW_SIZE + \
++                                  CAMELLIA_TRACE_WINDOW_SIZE)
 +#define CAMELLIA_FB_MAP_OFFSET   0x500ULL
 +#define CAMELLIA_FB_MAP_MAGIC    0x314D504649465545ULL
 +#define CAMELLIA_FB_MAP_MAX_RUNS 100
 +
 +SECURITY_READ_ONLY_LATE(vm_offset_t) camellia_io_window_base = 0;
 +SECURITY_READ_ONLY_LATE(vm_offset_t) camellia_fb_window_base = 0;
++SECURITY_READ_ONLY_LATE(vm_offset_t) camellia_trace_window_base = 0;
 +SECURITY_READ_ONLY_LATE(vm_offset_t) camellia_fb_phys = 0;
 +SECURITY_READ_ONLY_LATE(vm_size_t) camellia_fb_size = 0;
 +
@@ -214,6 +219,11 @@ index 985370e..42f12a8 100644
 +			    camellia_fb_phys, camellia_fb_size);
 +		}
 +	}
++
++	camellia_trace_window_base = camellia_io_window_base +
++	    CAMELLIA_IO_WINDOW_SIZE + CAMELLIA_FB_WINDOW_SIZE;
++	camellia_map_io_pages(cpu_ttep, camellia_trace_window_base,
++	    CAMELLIA_TRACE_PHYS_BASE, CAMELLIA_TRACE_WINDOW_SIZE);
 +}
 +
 +vm_offset_t
@@ -231,13 +241,21 @@ index 985370e..42f12a8 100644
 +	    size <= camellia_fb_size - (pa - camellia_fb_phys)) {
 +		return camellia_fb_window_base + (pa - camellia_fb_phys);
 +	}
++	if (camellia_trace_window_base != 0 &&
++	    pa >= CAMELLIA_TRACE_PHYS_BASE &&
++	    pa - CAMELLIA_TRACE_PHYS_BASE <= CAMELLIA_TRACE_WINDOW_SIZE &&
++	    size <= CAMELLIA_TRACE_WINDOW_SIZE -
++	    (pa - CAMELLIA_TRACE_PHYS_BASE)) {
++		return camellia_trace_window_base +
++		    (pa - CAMELLIA_TRACE_PHYS_BASE);
++	}
 +	return 0;
 +}
 +
  /*
   * Bounds of the kernelcache; used for accounting.
   */
-@@ -1829,6 +1997,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -1829,6 +2015,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
  	uint64_t         mem_segments;
  	vm_offset_t      ptpage_vaddr;
  	vm_map_address_t dynamic_memory_begin;
@@ -245,7 +263,7 @@ index 985370e..42f12a8 100644
  
  	/*
  	 * Get the virtual and physical kernel-managed memory base from boot_args.
-@@ -2224,6 +2393,10 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -2224,6 +2411,10 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
  	}
  
  	dynamic_memory_begin = ROUND_TWIG(dynamic_memory_begin);
@@ -256,7 +274,7 @@ index 985370e..42f12a8 100644
  #if defined(KERNEL_INTEGRITY_CTRR) && defined(CONFIG_XNUPOST)
  	// reserve a 32MB region without permission overrides to use later for a CTRR unit test
  	{
-@@ -2252,6 +2425,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -2252,6 +2443,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
  #endif
  #endif
  	pmap_bootstrap(dynamic_memory_begin);
@@ -266,7 +284,7 @@ index 985370e..42f12a8 100644
  
  	disable_preemption();
  
-@@ -2265,6 +2441,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -2265,6 +2459,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
  
  	va_l1 = dynamic_memory_begin;
  	va_l1_end = va_l1 + ((2 + (mem_segments * 10)) << 20);
@@ -276,7 +294,7 @@ index 985370e..42f12a8 100644
  	va_l1_end += round_page(args->Video.v_height * args->Video.v_rowBytes);
  	va_l1_end = (va_l1_end + 0x00000000007FFFFFULL) & 0xFFFFFFFFFF800000ULL;
  
-@@ -2303,6 +2482,10 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -2303,6 +2500,10 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
  		cpu_l1_tte++;
  	}
  
