@@ -238,3 +238,47 @@ index c524671..bf13418 100644
  	if (PE_parse_boot_argn("camellia-loadinit-fault", &loadinit_fault,
  	    sizeof(loadinit_fault)) && loadinit_fault) {
  		__asm__ volatile("brk #0xca11" ::: "memory");
+diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
+index 8fe43b6..13fdc58 100644
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -193,6 +193,7 @@ unsigned int page_shift_user32; /* for page_size as seen by a 32-bit task */
+ extern void configure_misc_apple_boot_args(void);
+ extern void configure_misc_apple_regs(bool is_boot_cpu);
+ extern void configure_timer_apple_regs(void);
++extern void camellia_persistent_trace_stage(uint32_t stage);
+ extern void configure_late_apple_regs(bool cold_boot);
+ #endif /* __arm64__ */
+ 
+@@ -354,6 +355,7 @@ arm_init(
+ 	unsigned int dt_entry_size = 0;
+ 
+ 	arm_setup_pre_sign();
++	camellia_persistent_trace_stage(8001);
+ 
+ 	arm_slide_rebase_and_sign_image();
+ 
+@@ -369,6 +371,7 @@ arm_init(
+ #endif /* defined(HAS_APPLE_PAC) */
+ 
+ 	PE_init_platform(FALSE, args); /* Get platform expert set up */
++	camellia_persistent_trace_stage(8002);
+ 
+ #if __arm64__
+ 	configure_timer_apple_regs();
+@@ -520,6 +523,7 @@ arm_init(
+ #endif  /* __ARM_PAN_AVAILABLE__ */
+ 
+ 	arm_vm_init(xmaxmem, args);
++	camellia_persistent_trace_stage(8003);
+ 
+ 	if (debug_boot_arg) {
+ 		patch_low_glo();
+@@ -534,6 +538,7 @@ arm_init(
+ 	/* Setup debugging output. */
+ 	const unsigned int serial_exists = serial_init();
+ 	kernel_startup_initialize_upto(STARTUP_SUB_KPRINTF);
++	camellia_persistent_trace_stage(8004);
+ 	kprintf("kprintf initialized\n");
+ 
+ 	serialmode = 0;
