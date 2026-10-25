@@ -35,7 +35,8 @@ fi
 # Remove them first so earlier independent patches retain their idempotent checks.
 # The same holds for the boot-time GPU addon mount and the staged system apps copy (zzy), which edit the owner Data mount function
 # inside the systemos patch. Reverse newest first; the loop below re-applies them in name order.
-for LATE_PATCH in "$ROOT/patches/xnu/camellia-pid1-exec-checkpoint.patch" \
+for LATE_PATCH in "$ROOT/patches/xnu/camellia-persistent-trace.patch" \
+    "$ROOT/patches/xnu/camellia-pid1-exec-checkpoint.patch" \
     "$ROOT/patches/xnu/camellia-user-syscall-checkpoint.patch" \
     "$ROOT/patches/xnu/zzz-boot-progress.patch" "$ROOT/patches/xnu/zzy-staged-system-apps.patch" \
     "$ROOT/patches/xnu/zzy-native-gpu-addon-mount.patch"; do
@@ -44,7 +45,8 @@ for LATE_PATCH in "$ROOT/patches/xnu/camellia-pid1-exec-checkpoint.patch" \
   fi
 done
 for PATCH in "$ROOT"/patches/xnu/*.patch "$ROOT"/kits/NativePrelink/patches/*.patch; do
-  if [ "$PATCH" = "$ROOT/patches/xnu/camellia-pid1-exec-checkpoint.patch" ]; then
+  if [ "$PATCH" = "$ROOT/patches/xnu/camellia-pid1-exec-checkpoint.patch" ] || \
+     [ "$PATCH" = "$ROOT/patches/xnu/camellia-persistent-trace.patch" ]; then
     continue
   fi
   if ! git -C .cache/xnu-work apply --reverse --check "$PATCH" >/dev/null 2>&1; then
@@ -57,6 +59,8 @@ done
 EXEC_STAGE_PATCH="$ROOT/patches/xnu/camellia-pid1-exec-checkpoint.patch"
 git -C .cache/xnu-work apply --check "$EXEC_STAGE_PATCH"
 git -C .cache/xnu-work apply "$EXEC_STAGE_PATCH"
+PERSISTENT_TRACE_PATCH="$ROOT/patches/xnu/camellia-persistent-trace.patch"
+git -C .cache/xnu-work apply "$PERSISTENT_TRACE_PATCH"
 export XNU_AVAILABILITY_PL=$ROOT/.cache/fakeroot/usr/local/libexec/availability.pl
 python3 scripts/prepare-xnu-source.py
 # The first pass of a new tree (XNU_BOOTSTRAP=1, set by the unixnu driver) only has to leave the compile records and

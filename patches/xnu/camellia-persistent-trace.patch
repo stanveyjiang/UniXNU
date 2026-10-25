@@ -1,0 +1,184 @@
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -173,6 +173,7 @@
+ 
+ #include <machine/machine_routines.h>
+ #include <machine/pal_routines.h>
++#include <machine/cpu_number.h>
+ 
+ #include <pexpert/pexpert.h>
+ 
+@@ -7052,12 +7053,165 @@
+ 
+ #include <sys/reboot.h>
+ 
++#define CAMELLIA_TRACE_PHYS      0x48080000ULL
++#define CAMELLIA_TRACE_BYTES     0x10000U
++#define CAMELLIA_TRACE_MAGIC     0x3145434152544d43ULL /* "CMTRACE1" */
++#define CAMELLIA_TRACE_VERSION   1U
++#define CAMELLIA_TRACE_HEADER    64U
++#define CAMELLIA_TRACE_ENTRY     64U
++#define CAMELLIA_TRACE_ENTRIES   \
++	((CAMELLIA_TRACE_BYTES - CAMELLIA_TRACE_HEADER) / CAMELLIA_TRACE_ENTRY)
++
++typedef struct camellia_trace_header {
++	uint64_t magic;
++	uint32_t version;
++	uint32_t total_bytes;
++	uint32_t entry_bytes;
++	uint32_t entry_count;
++	uint32_t next_sequence;
++	uint32_t dropped;
++	uint64_t boot_token;
++	uint64_t start_counter;
++	uint64_t reserved[2];
++} camellia_trace_header_t;
++
++typedef struct camellia_trace_entry {
++	uint64_t sequence;
++	uint64_t pc;
++	uint64_t arg0;
++	uint64_t arg1;
++	uint64_t counter;
++	uint32_t stage;
++	uint32_t cpu;
++	int32_t pid;
++	uint32_t flags;
++	uint64_t reserved;
++} camellia_trace_entry_t;
++
++_Static_assert(sizeof(camellia_trace_header_t) == CAMELLIA_TRACE_HEADER,
++    "camellia trace header ABI");
++_Static_assert(sizeof(camellia_trace_entry_t) == CAMELLIA_TRACE_ENTRY,
++    "camellia trace entry ABI");
++
++static camellia_trace_header_t *camellia_trace;
++static int camellia_trace_enabled = -1;
++
++static inline uint64_t
++camellia_trace_counter(void)
++{
++	uint64_t counter;
++
++	__asm__ volatile("isb; mrs %0, cntpct_el0" : "=r"(counter));
++	return counter;
++}
++
++static void
++camellia_trace_clean(void *address, size_t size)
++{
++	uintptr_t line = (uintptr_t)address & ~0x3fULL;
++	uintptr_t end = (uintptr_t)address + size;
++
++	for (; line < end; line += 64) {
++		__asm__ volatile("dc civac, %0" : : "r"(line) : "memory");
++	}
++	__asm__ volatile("dsb sy; isb" : : : "memory");
++}
++
++static void
++camellia_trace_init(void)
++{
++	int enabled = 0;
++	uint64_t counter;
++	vm_offset_t address;
++
++	if (camellia_trace_enabled >= 0) {
++		return;
++	}
++	camellia_trace_enabled = 0;
++	if (!PE_parse_boot_argn("camellia-persistent-trace", &enabled,
++	    sizeof(enabled)) || !enabled) {
++		return;
++	}
++	address = phystokv((pmap_paddr_t)CAMELLIA_TRACE_PHYS);
++	if (address < VM_MIN_KERNEL_ADDRESS ||
++	    address > VM_MAX_KERNEL_ADDRESS - CAMELLIA_TRACE_BYTES) {
++		return;
++	}
++	camellia_trace = (camellia_trace_header_t *)address;
++	counter = camellia_trace_counter();
++
++	/* Publish magic only after the complete empty ring is on the PoC. */
++	camellia_trace->magic = 0;
++	camellia_trace_clean(camellia_trace, sizeof(*camellia_trace));
++	bzero(camellia_trace, sizeof(*camellia_trace));
++	camellia_trace->version = CAMELLIA_TRACE_VERSION;
++	camellia_trace->total_bytes = CAMELLIA_TRACE_BYTES;
++	camellia_trace->entry_bytes = CAMELLIA_TRACE_ENTRY;
++	camellia_trace->entry_count = CAMELLIA_TRACE_ENTRIES;
++	camellia_trace->next_sequence = 1;
++	camellia_trace->boot_token = counter;
++	camellia_trace->start_counter = counter;
++	camellia_trace_clean(camellia_trace, sizeof(*camellia_trace));
++	camellia_trace->magic = CAMELLIA_TRACE_MAGIC;
++	camellia_trace_clean(camellia_trace, sizeof(*camellia_trace));
++	camellia_trace_enabled = 1;
++}
++
++static void
++camellia_trace_record(uint32_t stage, uint64_t arg0, uint64_t arg1,
++    uint64_t pc)
++{
++	camellia_trace_entry_t *entry;
++	camellia_trace_header_t *header;
++	proc_t process;
++	uint32_t sequence;
++	uint32_t index;
++
++	camellia_trace_init();
++	if (camellia_trace_enabled != 1 || camellia_trace == NULL) {
++		return;
++	}
++	header = camellia_trace;
++	if (header->magic != CAMELLIA_TRACE_MAGIC ||
++	    header->version != CAMELLIA_TRACE_VERSION ||
++	    header->entry_count == 0) {
++		return;
++	}
++	sequence = header->next_sequence;
++	if (sequence == 0) {
++		sequence = 1;
++	}
++	index = (sequence - 1) % header->entry_count;
++	entry = (camellia_trace_entry_t *)((uint8_t *)header +
++	    CAMELLIA_TRACE_HEADER + index * sizeof(*entry));
++	process = current_proc();
++
++	entry->sequence = 0;
++	camellia_trace_clean(entry, sizeof(*entry));
++	entry->pc = pc;
++	entry->arg0 = arg0;
++	entry->arg1 = arg1;
++	entry->counter = camellia_trace_counter();
++	entry->stage = stage;
++	entry->cpu = (uint32_t)cpu_number();
++	entry->pid = process ? proc_getpid(process) : 0;
++	entry->flags = 0;
++	entry->reserved = 0;
++	camellia_trace_clean(entry, sizeof(*entry));
++	entry->sequence = sequence;
++	camellia_trace_clean(entry, sizeof(*entry));
++	header->next_sequence = sequence + 1;
++	camellia_trace_clean(header, sizeof(*header));
++}
++
+ static void
+ camellia_exec_checkpoint(unsigned int stage)
+ {
+ 	char text[48];
+ 	static int panic_stage = -2;
+ 
++	camellia_trace_record(stage, 0, 0,
++	    (uint64_t)(uintptr_t)__builtin_return_address(0));
+ 	if (panic_stage == -2) {
+ 		int requested = -1;
+ 
+@@ -8099,6 +8253,7 @@
+ {
+ 	int loadinit_fault = 0;
+ 
++	camellia_exec_checkpoint(1001);
+ 	if (PE_parse_boot_argn("camellia-loadinit-fault", &loadinit_fault,
+ 	    sizeof(loadinit_fault)) && loadinit_fault) {
+ 		__asm__ volatile("brk #0xca11" ::: "memory");
