@@ -46,7 +46,7 @@ index 94243c9..047e6c7 100644
  }
  
 diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
-index c524671..380edab 100644
+index c524671..bf1fc47 100644
 --- a/bsd/kern/kern_exec.c
 +++ b/bsd/kern/kern_exec.c
 @@ -173,6 +173,7 @@
@@ -63,8 +63,8 @@ index c524671..380edab 100644
  
 +extern vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
 +
-+#define CAMELLIA_TRACE_PHYS      0x48080000ULL
-+#define CAMELLIA_TRACE_BYTES     0x10000U
++#define CAMELLIA_TRACE_PHYS      0xA4000900ULL
++#define CAMELLIA_TRACE_BYTES     0x700U
 +#define CAMELLIA_TRACE_MAGIC     0x3145434152544d43ULL /* "CMTRACE1" */
 +#define CAMELLIA_TRACE_VERSION   1U
 +#define CAMELLIA_TRACE_HEADER    64U
