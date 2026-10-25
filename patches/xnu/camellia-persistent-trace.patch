@@ -1,3 +1,52 @@
+diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
+index 94243c9..047e6c7 100644
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -211,6 +211,7 @@ void IOSetImageBoot(void);              /* XXX */
+ void loopattach(void);                  /* XXX */
+ 
+ void ipc_task_enable(task_t task);
++extern void camellia_persistent_trace_stage(uint32_t stage);
+ 
+ const char *const copyright =
+     "Copyright (c) 1982, 1986, 1989, 1991, 1993\n\t"
+@@ -576,6 +577,8 @@ bsd_init(void)
+ 	boolean_t       netboot = FALSE;
+ #endif
+ 
++	camellia_persistent_trace_stage(9001);
++
+ #if (DEVELOPMENT || DEBUG)
+ 	platform_stall_panic_or_spin(PLATFORM_STALL_XNU_LOCATION_BSD_INIT);
+ #endif
+@@ -1262,6 +1265,7 @@ bsdinit_task(void)
+ {
+ 	proc_t p = current_proc();
+ 
++	camellia_persistent_trace_stage(9003);
+ 	process_name("init", p);
+ 
+ 	/* Set up exception-to-signal reflection */
+@@ -1272,6 +1276,7 @@ bsdinit_task(void)
+ #endif
+ 
+ 	vm_init_before_launchd();
++	camellia_persistent_trace_stage(9004);
+ 
+ #if CONFIG_XNUPOST
+ 	int result = bsd_list_tests();
+@@ -1283,7 +1288,9 @@ bsdinit_task(void)
+ 
+ 	bsd_init_kprintf("bsd_do_post - done");
+ 
++	camellia_persistent_trace_stage(9005);
+ 	load_init_program(p);
++	camellia_persistent_trace_stage(9006);
+ 	lock_trace = 1;
+ }
+ 
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+index c524671..893dd85 100644
 --- a/bsd/kern/kern_exec.c
 +++ b/bsd/kern/kern_exec.c
 @@ -173,6 +173,7 @@
@@ -8,7 +57,7 @@
  
  #include <pexpert/pexpert.h>
  
-@@ -7052,12 +7053,177 @@
+@@ -7052,12 +7053,177 @@ create_unix_stack(vm_map_t map, load_result_t* load_result,
  
  #include <sys/reboot.h>
  
@@ -186,7 +235,7 @@
  	if (panic_stage == -2) {
  		int requested = -1;
  
-@@ -8099,6 +8265,7 @@
+@@ -8099,6 +8265,7 @@ load_init_program(proc_t p)
  {
  	int loadinit_fault = 0;
  
@@ -194,56 +243,3 @@
  	if (PE_parse_boot_argn("camellia-loadinit-fault", &loadinit_fault,
  	    sizeof(loadinit_fault)) && loadinit_fault) {
  		__asm__ volatile("brk #0xca11" ::: "memory");
---- a/bsd/kern/bsd_init.c
-+++ b/bsd/kern/bsd_init.c
-@@ -210,6 +210,7 @@
- void loopattach(void);                  /* XXX */
- 
- void ipc_task_enable(task_t task);
-+extern void camellia_persistent_trace_stage(uint32_t stage);
- 
- const char *const copyright =
-     "Copyright (c) 1982, 1986, 1989, 1991, 1993\n\t"
-@@ -491,6 +492,8 @@
- 	boolean_t       netboot = FALSE;
- #endif
- 
-+	camellia_persistent_trace_stage(9001);
-+
- #if (DEVELOPMENT || DEBUG)
- 	platform_stall_panic_or_spin(PLATFORM_STALL_XNU_LOCATION_BSD_INIT);
- #endif
-@@ -1068,6 +1071,7 @@
- #endif /* DEVELOPMENT || DEBUG */
- 
- 	bsd_init_kprintf("done\n");
-+	camellia_persistent_trace_stage(9002);
- }
- 
- void
-@@ -1075,6 +1079,7 @@
- {
- 	proc_t p = current_proc();
- 
-+	camellia_persistent_trace_stage(9003);
- 	process_name("init", p);
- 
- 	/* Set up exception-to-signal reflection */
-@@ -1085,6 +1090,7 @@
- #endif
- 
- 	vm_init_before_launchd();
-+	camellia_persistent_trace_stage(9004);
- 
- #if CONFIG_XNUPOST
- 	int result = bsd_list_tests();
-@@ -1096,7 +1102,9 @@
- 
- 	bsd_init_kprintf("bsd_do_post - done");
- 
-+	camellia_persistent_trace_stage(9005);
- 	load_init_program(p);
-+	camellia_persistent_trace_stage(9006);
- 	lock_trace = 1;
- }
- 
