@@ -1,0 +1,36 @@
+diff --git a/libkern/libkern/c++/OSMetaClass.h b/libkern/libkern/c++/OSMetaClass.h
+index 3d3b3ab..03d2c6e 100644
+--- a/libkern/libkern/c++/OSMetaClass.h
++++ b/libkern/libkern/c++/OSMetaClass.h
+@@ -2098,20 +2098,17 @@
+ 
+ #ifdef KERNEL_PRIVATE
+ #define OSDefineOperatorMethodsWithZone(className)              \
+-	void * className :: operator new(size_t size) {             \
+-	    if (className ## _zone) {                               \
+-	        return zalloc_flags(className ## _zone,             \
+-	                        (zalloc_flags_t) (Z_WAITOK | Z_ZERO));\
+-	    } else {                                                \
+-	        return OSObject::operator new(size);                \
+-	    }                                                       \
+-	}                                                           \
+-	void className :: operator delete(void *mem, size_t size) { \
+-	    if (className ## _zone) {                               \
+-	        kern_os_zfree(className ## _zone, mem, size);       \
+-	    } else {                                                \
+-	        return OSObject::operator delete(mem, size);        \
+-	    }                                                       \
++	/*                                                          \
++	 * Camellia bootstraps from a non-Apple boot chain before the     \
++	 * class-specific zones are dependable. Keep allocations and      \
++	 * frees on the same kheap path so initialization cannot leave a  \
++	 * partially initialized collection behind.                      \
++	 */                                                         \
++	void * className :: operator new(size_t size) {             \
++	    return OSObject::operator new(size);                    \
++	}                                                           \
++	void className :: operator delete(void *mem, size_t size) { \
++	    OSObject::operator delete(mem, size);                   \
+ 	}
+ #endif /* KERNEL_PRIVATE */
+ 
