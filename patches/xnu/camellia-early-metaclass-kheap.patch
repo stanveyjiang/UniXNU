@@ -1,8 +1,24 @@
 diff --git a/libkern/libkern/c++/OSMetaClass.h b/libkern/libkern/c++/OSMetaClass.h
-index 3d3b3ab..03d2c6e 100644
+index 3d3b3ab..9fd71a2 100644
 --- a/libkern/libkern/c++/OSMetaClass.h
 +++ b/libkern/libkern/c++/OSMetaClass.h
-@@ -2098,20 +2098,17 @@
+@@ -2008,14 +2008,7 @@
+ #ifdef KERNEL_PRIVATE
+ #define OSMetaClassConstructorInitWithZone(className,           \
+ 	    superclassName, init, zflags)                           \
+-	declareZone(className)                                      \
+-	/* The ::MetaClass constructor */                           \
+-	className ::MetaClass::MetaClass()                          \
+-	: OSMetaClass(#className, className::superClass,            \
+-	                sizeof(className),                          \
+-	                &(className ## _zone),                      \
+-	                "iokit." #className, zflags)                \
+-	{ init; }
++	OSMetaClassConstructorInit(className, superclassName, init)
+ #endif /* KERNEL_PRIVATE */
+ 
+ #define OSDefineMetaClassWithInit(className, superclassName,    \
+@@ -2098,20 +2091,16 @@
  
  #ifdef KERNEL_PRIVATE
  #define OSDefineOperatorMethodsWithZone(className)              \
@@ -22,9 +38,8 @@ index 3d3b3ab..03d2c6e 100644
 -	    }                                                       \
 +	/*                                                          \
 +	 * Camellia bootstraps from a non-Apple boot chain before the     \
-+	 * class-specific zones are dependable. Keep allocations and      \
-+	 * frees on the same kheap path so initialization cannot leave a  \
-+	 * partially initialized collection behind.                      \
++	 * class-specific zones are dependable. Keep allocation, zone  \
++	 * creation and destruction on the regular MetaClass/kheap paths.\
 +	 */                                                         \
 +	void * className :: operator new(size_t size) {             \
 +	    return OSObject::operator new(size);                    \
