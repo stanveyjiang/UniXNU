@@ -239,10 +239,10 @@ index c524671..bf13418 100644
  	    sizeof(loadinit_fault)) && loadinit_fault) {
  		__asm__ volatile("brk #0xca11" ::: "memory");
 diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
-index 89e6327..962b970 100644
+index 18f47bb..b71c9e3 100644
 --- a/osfmk/arm/arm_init.c
 +++ b/osfmk/arm/arm_init.c
-@@ -193,6 +193,7 @@ unsigned int page_shift_user32; /* for page_size as seen by a 32-bit task */
+@@ -194,6 +194,7 @@ unsigned int page_shift_user32; /* for page_size as seen by a 32-bit task */
  extern void configure_misc_apple_boot_args(void);
  extern void configure_misc_apple_regs(bool is_boot_cpu);
  extern void configure_timer_apple_regs(void);
@@ -250,7 +250,7 @@ index 89e6327..962b970 100644
  extern void configure_late_apple_regs(bool cold_boot);
  #endif /* __arm64__ */
  
-@@ -356,6 +357,7 @@ arm_init(
+@@ -357,6 +358,7 @@ arm_init(
  	unsigned int dt_entry_size = 0;
  
  	arm_setup_pre_sign();
@@ -258,23 +258,23 @@ index 89e6327..962b970 100644
  
  	arm_slide_rebase_and_sign_image();
  
-@@ -378,6 +380,7 @@ arm_init(
- #endif /* defined(HAS_APPLE_PAC) */
+@@ -380,6 +382,7 @@ arm_init(
  
  	PE_init_platform(FALSE, args); /* Get platform expert set up */
+ 	boot_progress_init();
 +	camellia_persistent_trace_stage(8002);
  
  #if __arm64__
  	configure_timer_apple_regs();
-@@ -539,6 +542,7 @@ arm_init(
- #endif  /* __ARM_PAN_AVAILABLE__ */
+@@ -542,6 +545,7 @@ arm_init(
  
+ 	boot_progress_stage("arm_vm_init enter");
  	arm_vm_init(xmaxmem, args);
 +	camellia_persistent_trace_stage(8003);
+ 	boot_progress_stage("arm_vm_init returned");
  
  	if (debug_boot_arg) {
- 		patch_low_glo();
-@@ -553,6 +557,7 @@ arm_init(
+@@ -557,6 +561,7 @@ arm_init(
  	/* Setup debugging output. */
  	const unsigned int serial_exists = serial_init();
  	kernel_startup_initialize_upto(STARTUP_SUB_KPRINTF);
