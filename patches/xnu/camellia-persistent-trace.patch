@@ -8,10 +8,15 @@
  
  #include <pexpert/pexpert.h>
  
-@@ -7052,12 +7053,165 @@
+@@ -7052,12 +7053,170 @@
  
  #include <sys/reboot.h>
  
++#if defined(__arm64__)
++typedef uint64_t camellia_pmap_paddr_t __kernel_ptr_semantics;
++extern vm_map_address_t phystokv(camellia_pmap_paddr_t pa);
++#endif
++
 +#define CAMELLIA_TRACE_PHYS      0x48080000ULL
 +#define CAMELLIA_TRACE_BYTES     0x10000U
 +#define CAMELLIA_TRACE_MAGIC     0x3145434152544d43ULL /* "CMTRACE1" */
@@ -91,7 +96,7 @@
 +	    sizeof(enabled)) || !enabled) {
 +		return;
 +	}
-+	address = phystokv((pmap_paddr_t)CAMELLIA_TRACE_PHYS);
++	address = phystokv((camellia_pmap_paddr_t)CAMELLIA_TRACE_PHYS);
 +	if (address < VM_MIN_KERNEL_ADDRESS ||
 +	    address > VM_MAX_KERNEL_ADDRESS - CAMELLIA_TRACE_BYTES) {
 +		return;
@@ -174,7 +179,7 @@
  	if (panic_stage == -2) {
  		int requested = -1;
  
-@@ -8099,6 +8253,7 @@
+@@ -8099,6 +8258,7 @@
  {
  	int loadinit_fault = 0;
  
