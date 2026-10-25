@@ -46,7 +46,7 @@ index 94243c9..047e6c7 100644
  }
  
 diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
-index c524671..893dd85 100644
+index c524671..9404d8c 100644
 --- a/bsd/kern/kern_exec.c
 +++ b/bsd/kern/kern_exec.c
 @@ -173,6 +173,7 @@
@@ -57,15 +57,10 @@ index c524671..893dd85 100644
  
  #include <pexpert/pexpert.h>
  
-@@ -7052,12 +7053,177 @@ create_unix_stack(vm_map_t map, load_result_t* load_result,
+@@ -7052,12 +7053,168 @@ create_unix_stack(vm_map_t map, load_result_t* load_result,
  
  #include <sys/reboot.h>
  
-+#if defined(__arm64__)
-+typedef uint64_t camellia_pmap_paddr_t __kernel_ptr_semantics;
-+extern vm_map_address_t phystokv(camellia_pmap_paddr_t pa);
-+#endif
-+
 +#define CAMELLIA_TRACE_PHYS      0x48080000ULL
 +#define CAMELLIA_TRACE_BYTES     0x10000U
 +#define CAMELLIA_TRACE_MAGIC     0x3145434152544d43ULL /* "CMTRACE1" */
@@ -121,12 +116,8 @@ index c524671..893dd85 100644
 +static void
 +camellia_trace_clean(void *address, size_t size)
 +{
-+	uintptr_t line = (uintptr_t)address & ~0x3fULL;
-+	uintptr_t end = (uintptr_t)address + size;
-+
-+	for (; line < end; line += 64) {
-+		__asm__ volatile("dc civac, %0" : : "r"(line) : "memory");
-+	}
++	(void)address;
++	(void)size;
 +	__asm__ volatile("dsb sy; isb" : : : "memory");
 +}
 +
@@ -145,9 +136,9 @@ index c524671..893dd85 100644
 +	    sizeof(enabled)) || !enabled) {
 +		return;
 +	}
-+	address = phystokv((camellia_pmap_paddr_t)CAMELLIA_TRACE_PHYS);
-+	if (address < VM_MIN_KERNEL_ADDRESS ||
-+	    address > VM_MAX_KERNEL_ADDRESS - CAMELLIA_TRACE_BYTES) {
++	address = ml_io_map((vm_offset_t)CAMELLIA_TRACE_PHYS,
++	    CAMELLIA_TRACE_BYTES);
++	if (address == 0) {
 +		return;
 +	}
 +	camellia_trace = (camellia_trace_header_t *)address;
@@ -235,7 +226,7 @@ index c524671..893dd85 100644
  	if (panic_stage == -2) {
  		int requested = -1;
  
-@@ -8099,6 +8265,7 @@ load_init_program(proc_t p)
+@@ -8099,6 +8256,7 @@ load_init_program(proc_t p)
  {
  	int loadinit_fault = 0;
  
