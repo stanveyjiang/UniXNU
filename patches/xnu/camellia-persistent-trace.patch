@@ -46,7 +46,7 @@ index 94243c9..047e6c7 100644
  }
  
 diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
-index c524671..bf13418 100644
+index c524671..d8de4d4 100644
 --- a/bsd/kern/kern_exec.c
 +++ b/bsd/kern/kern_exec.c
 @@ -173,6 +173,7 @@
@@ -57,7 +57,7 @@ index c524671..bf13418 100644
  
  #include <pexpert/pexpert.h>
  
-@@ -7052,12 +7053,172 @@ create_unix_stack(vm_map_t map, load_result_t* load_result,
+@@ -7052,12 +7053,173 @@ create_unix_stack(vm_map_t map, load_result_t* load_result,
  
  #include <sys/reboot.h>
  
@@ -133,14 +133,15 @@ index c524671..bf13418 100644
 +	if (camellia_trace_enabled >= 0) {
 +		return;
 +	}
-+	camellia_trace_enabled = 0;
 +	if (!PE_parse_boot_argn("camellia-persistent-trace", &enabled,
 +	    sizeof(enabled)) || !enabled) {
++		camellia_trace_enabled = 0;
 +		return;
 +	}
 +	address = ml_io_map((vm_offset_t)CAMELLIA_TRACE_PHYS,
 +	    CAMELLIA_TRACE_BYTES);
 +	if (address == 0) {
++		/* The mapping service is not ready yet; retry at a later stage. */
 +		return;
 +	}
 +	camellia_trace = (camellia_trace_header_t *)address;
@@ -230,7 +231,7 @@ index c524671..bf13418 100644
  	if (panic_stage == -2) {
  		int requested = -1;
  
-@@ -8099,6 +8260,7 @@ load_init_program(proc_t p)
+@@ -8099,6 +8261,7 @@ load_init_program(proc_t p)
  {
  	int loadinit_fault = 0;
  
