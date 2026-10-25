@@ -1,0 +1,54 @@
+diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
+--- a/osfmk/arm64/arm_vm_init.c
++++ b/osfmk/arm64/arm_vm_init.c
+@@ -500,6 +500,25 @@ camellia_io_lookup(vm_offset_t pa, vm_size_t size)
+ 	return 0;
+ }
+ 
++void
++camellia_user_syscall_checkpoint(int pid, unsigned short code)
++{
++	volatile uint32_t *fb;
++	vm_size_t bytes;
++
++	(void)code;
++	if (pid != 1 || camellia_fb_window_base == 0 || camellia_fb_size < 4) {
++		return;
++	}
++	fb = (volatile uint32_t *)(uintptr_t)camellia_fb_window_base;
++	bytes = MIN((vm_size_t)0x10000, camellia_fb_size);
++	for (vm_size_t offset = 0; offset + sizeof(uint32_t) <= bytes;
++	    offset += sizeof(uint32_t)) {
++		fb[offset / sizeof(uint32_t)] = 0xFF00FFFF;
++	}
++	__builtin_arm_dmb(DMB_ISH);
++}
++
+ /*
+  * Bounds of the kernelcache; used for accounting.
+  */
+diff --git a/bsd/dev/arm/systemcalls.c b/bsd/dev/arm/systemcalls.c
+--- a/bsd/dev/arm/systemcalls.c
++++ b/bsd/dev/arm/systemcalls.c
+@@ -42,6 +42,9 @@
+ extern void
+ unix_syscall(struct arm_saved_state * regs, thread_t thread_act, struct proc * proc);
+ 
++extern void camellia_user_syscall_checkpoint(int, unsigned short);
++static boolean_t camellia_user_syscall_seen;
++
+ static int      arm_get_syscall_args(uthread_t, struct arm_saved_state *, const struct sysent *);
+ static int      arm_get_u32_syscall_args(uthread_t, arm_saved_state32_t *, const struct sysent *);
+ static void     arm_prepare_u32_syscall_return(const struct sysent *, arm_saved_state_t *, uthread_t, int);
+@@ -99,5 +102,10 @@ unix_syscall(
+ 	uthread_reset_proc_refcount(uthread);
+ 
+ 	code = arm_get_syscall_number(state);
++	if (proc_pid(proc) == 1 && !camellia_user_syscall_seen) {
++		camellia_user_syscall_seen = TRUE;
++		camellia_user_syscall_checkpoint(proc_pid(proc), code);
++	}
++
+ 
+ #define unix_syscall_kprintf(x...)      /* kprintf("unix_syscall: " x) */
+ 
