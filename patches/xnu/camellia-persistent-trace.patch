@@ -46,7 +46,7 @@ index 94243c9..047e6c7 100644
  }
  
 diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
-index c524671..d8de4d4 100644
+index c524671..380edab 100644
 --- a/bsd/kern/kern_exec.c
 +++ b/bsd/kern/kern_exec.c
 @@ -173,6 +173,7 @@
@@ -126,15 +126,15 @@ index c524671..d8de4d4 100644
 +static void
 +camellia_trace_init(void)
 +{
-+	int enabled = 0;
++	int enabled = 1;
 +	uint64_t counter;
 +	vm_offset_t address;
 +
 +	if (camellia_trace_enabled >= 0) {
 +		return;
 +	}
-+	if (!PE_parse_boot_argn("camellia-persistent-trace", &enabled,
-+	    sizeof(enabled)) || !enabled) {
++	if (PE_parse_boot_argn("camellia-persistent-trace", &enabled,
++	    sizeof(enabled)) && !enabled) {
 +		camellia_trace_enabled = 0;
 +		return;
 +	}
